@@ -1,0 +1,62 @@
+version: "3.9"
+
+services:
+  mysql:
+    image: mysql:8
+    container_name: financetracker-mysql
+    restart: always
+    environment:
+      MYSQL_ROOT_PASSWORD: root
+      MYSQL_DATABASE: financetrackerdb
+    ports:
+      - "3306:3306"
+    volumes:
+      - mysql_data:/var/lib/mysql
+
+  finance-service:
+    build:
+      context: ./services/finance-service
+      dockerfile: Dockerfile
+    container_name: finance-service
+    restart: always
+    depends_on:
+      - mysql
+    environment:
+      ConnectionStrings__DefaultConnection: "server=mysql;port=3306;database=financetrackerdb;user=root;password=root;"
+      Jwt__Key: "y2E4UoLuJm+SC9EZEa2ku2m5mXI8tP/qPY1C/a3QsPBhJabiFmpiJF/7JVibGAlN4WzwDK0Amly47v+RHsloFw=="
+      Jwt__Issuer: "AuthService"
+      Jwt__Audience: "FinanceTrackerUsers"
+    ports:
+      - "5206:8080"
+
+  auth-service:
+    build:
+      context: ./services/auth-service
+      dockerfile: Dockerfile
+    container_name: auth-service
+    restart: always
+    depends_on:
+      - mysql
+    environment:
+      ConnectionStrings__DefaultConnection: "server=mysql;port=3306;database=authdb;user=root;password=root;"
+      Jwt__Key: "y2E4UoLuJm+SC9EZEa2ku2m5mXI8tP/qPY1C/a3QsPBhJabiFmpiJF/7JVibGAlN4WzwDK0Amly47v+RHsloFw=="
+      Jwt__Issuer: "AuthService"
+      Jwt__Audience: "FinanceTrackerUsers"
+      Jwt__ExpiryMinutes: "120"
+    ports:
+      - "5100:8080"
+
+  webapp:
+    build:
+      context: ./webapp
+      dockerfile: Dockerfile
+    container_name: finance-webapp
+    restart: always
+    depends_on:
+      - finance-service
+      - auth-service
+    ports:
+      - "5173:5173"
+
+volumes:
+  mysql_data:
