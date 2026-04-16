@@ -126,3 +126,4 @@
 /Users/gida/Desktop/FinanceTracker/services/finance-service/obj/Debug/net9.0/FinanceTracker.Api.pdb
 /Users/gida/Desktop/FinanceTracker/services/finance-service/obj/Debug/net9.0/FinanceTracker.Api.genruntimeconfig.cache
 /Users/gida/Desktop/FinanceTracker/services/finance-service/obj/Debug/net9.0/ref/FinanceTracker.Api.dll
+/Users/gida/Desktop/FinanceTracker/services/finance-service/obj/Debug/net9.0/FinanceTracker.Api.sourcelink.json

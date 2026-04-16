@@ -16,9 +16,9 @@ public class CategoriesController : ControllerBase
     }
 
     [HttpGet]
-    public async Task<IActionResult> GetAll()
+    public async Task<IActionResult> GetAll(int userId)
     {
-        var categories = await _categoryService.GetAllAsync();
+        var categories = await _categoryService.GetAllAsync(userId);
 
         return Ok(categories);
     }

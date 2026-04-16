@@ -1,10 +1,15 @@
 import { useEffect, useMemo, useState } from "react";
+import { Navigate, Route, Routes } from "react-router-dom";
 import "./App.css";
 
 import { authApi, financeApi, getEmailFromTokenPayload } from "./api/clients";
 import { clearToken, decodeJwt, getToken, setToken } from "./auth/token";
+
+import Header from "./components/Header";
+import HomePage from "./pages/HomePage";
 import LoginPage from "./pages/LoginPage";
 import RegisterPage from "./pages/RegisterPage";
+import TrackerPage from "./pages/TrackerPage";
 
 function App() {
   const [transactions, setTransactions] = useState([]);
@@ -12,26 +17,30 @@ function App() {
   const [summary, setSummary] = useState(null);
   const [authToken, setAuthToken] = useState(() => getToken());
   const [authOpen, setAuthOpen] = useState(false);
-  const [authMode, setAuthMode] = useState("login"); // "login" | "register"
+  const [authMode, setAuthMode] = useState("login");
   const [authForm, setAuthForm] = useState({ email: "", password: "" });
   const [authError, setAuthError] = useState("");
   const [editingId, setEditingId] = useState(null);
-  const userEmail = useMemo(() => {
-    if (!authToken) return null;
-    const payload = decodeJwt(authToken);
-    return getEmailFromTokenPayload(payload);
-  }, [authToken]);
+  const [transactionError, setTransactionError] = useState("");
+  const [transactionSuccess, setTransactionSuccess] = useState("");
 
   const [formData, setFormData] = useState({
     amount: "",
     type: "Expense",
     description: "",
     date: "",
-    categoryId: ""
+    categoryName: ""
   });
+
+  const userEmail = useMemo(() => {
+    if (!authToken) return null;
+    const payload = decodeJwt(authToken);
+    return getEmailFromTokenPayload(payload);
+  }, [authToken]);
 
   useEffect(() => {
     if (!authToken) return;
+
     const load = async () => {
       try {
         const [txRes, categoriesRes, summaryRes] = await Promise.all([
@@ -62,10 +71,10 @@ function App() {
   }
 
   const handleChange = (e) => {
-    setFormData({
-      ...formData,
+    setFormData((prev) => ({
+      ...prev,
       [e.target.name]: e.target.value
-    });
+    }));
   };
 
   const handleDelete = async (id) => {
@@ -85,7 +94,18 @@ function App() {
       type: transaction.type,
       description: transaction.description || "",
       date: new Date(transaction.date).toISOString().slice(0, 16),
-      categoryId: transaction.categoryId?.toString() || ""
+      categoryName: transaction.categoryName || ""
+    });
+  };
+
+  const handleCancelEdit = () => {
+    setEditingId(null);
+    setFormData({
+      amount: "",
+      type: "Expense",
+      description: "",
+      date: "",
+      categoryName: ""
     });
   };
 
@@ -98,7 +118,7 @@ function App() {
         type: formData.type,
         description: formData.description,
         date: formData.date,
-        categoryId: Number(formData.categoryId)
+        categoryName: formData.categoryName.trim() || null
       };
 
       if (editingId) {
@@ -107,16 +127,7 @@ function App() {
         await financeApi.post("/transactions", payload);
       }
 
-      setFormData({
-        amount: "",
-        type: "Expense",
-        description: "",
-        date: "",
-        categoryId: ""
-      });
-
-      setEditingId(null);
-
+      handleCancelEdit();
       await refreshTransactions();
       await refreshSummary();
     } catch (error) {
@@ -142,7 +153,6 @@ function App() {
           password: authForm.password
         });
 
-        // After successful register, switch to login.
         setAuthMode("login");
         setAuthError("Registration successful. Please login.");
         return;
@@ -168,6 +178,7 @@ function App() {
         error?.response?.data ||
         error?.message ||
         "Failed to login.";
+
       setAuthError(typeof message === "string" ? message : "Failed to login.");
     }
   };
@@ -177,57 +188,40 @@ function App() {
     setAuthToken(null);
     setAuthOpen(false);
     setAuthError("");
+    setTransactions([]);
+    setCategories([]);
+    setSummary(null);
+    handleCancelEdit();
   };
 
-  const incomeTransactions = transactions.filter((transaction) => transaction.type === "Income");
-  const expenseTransactions = transactions.filter((transaction) => transaction.type === "Expense");
+  const openLogin = () => {
+    setAuthMode("login");
+    setAuthOpen(true);
+    setAuthError("");
+  };
+
+  const openRegister = () => {
+    setAuthMode("register");
+    setAuthOpen(true);
+    setAuthError("");
+  };
+
+  const incomeTransactions = transactions.filter(
+    (transaction) => transaction.type === "Income"
+  );
+
+  const expenseTransactions = transactions.filter(
+    (transaction) => transaction.type === "Expense"
+  );
 
   return (
     <div className="app-shell">
-      <header className="top-banner">
-        <div className="banner-content">
-          <div>
-            <p className="banner-kicker">Finance Tracker</p>
-            <h1>Manage Your Finances Simplier</h1>
-            <p className="banner-subtitle">
-              Pradine versija sukurta taip, kad veliau lengvai prijungsime prisijungima, vartotojo paskyra ir istorija.
-            </p>
-          </div>
-          {userEmail ? (
-            <div className="header-actions">
-              <span className="user-email">{userEmail}</span>
-              <button type="button" className="logout-btn" onClick={handleLogout}>
-                Log out
-              </button>
-            </div>
-          ) : (
-            <div className="header-actions">
-              <button
-                type="button"
-                className="login-btn"
-                onClick={() => {
-                  setAuthMode("login");
-                  setAuthOpen(true);
-                  setAuthError("");
-                }}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                className="login-btn login-btn-alt"
-                onClick={() => {
-                  setAuthMode("register");
-                  setAuthOpen(true);
-                  setAuthError("");
-                }}
-              >
-                Register
-              </button>
-            </div>
-          )}
-        </div>
-      </header>
+      <Header
+        userEmail={userEmail}
+        onLogout={handleLogout}
+        onOpenLogin={openLogin}
+        onOpenRegister={openRegister}
+      />
 
       {authOpen && (
         <div
@@ -272,213 +266,43 @@ function App() {
         </div>
       )}
 
-      <main className="content">
-        {!authToken ? (
-          <section className="card auth-gate">
-            <h2>Need Authentication</h2>
-            <p>Login or create an account to view transactions.</p>
-            <div className="auth-gate-actions">
-              <button
-                type="button"
-                className="login-btn"
-                onClick={() => {
-                  setAuthMode("login");
-                  setAuthOpen(true);
-                  setAuthError("");
-                }}
-              >
-                Login
-              </button>
-              <button
-                type="button"
-                className="login-btn login-btn-alt"
-                onClick={() => {
-                  setAuthMode("register");
-                  setAuthOpen(true);
-                  setAuthError("");
-                }}
-              >
-                Register
-              </button>
-            </div>
-          </section>
-        ) : (
-          <>
-            {summary && (
-              <section className="card">
-                <h2>Summary</h2>
-                <div className="summary-grid">
-                  <article className="summary-item">
-                    <span>Income</span>
-                    <strong>{summary.totalIncome}</strong>
-                  </article>
-                  <article className="summary-item">
-                    <span>Expenses</span>
-                    <strong>{summary.totalExpense}</strong>
-                  </article>
-                  <article className="summary-item">
-                    <span>Balance</span>
-                    <strong>{summary.balance}</strong>
-                  </article>
-                </div>
-              </section>
-            )}
+      <Routes>
+        <Route
+          path="/"
+          element={
+            <HomePage
+              authToken={authToken}
+              onOpenLogin={openLogin}
+              onOpenRegister={openRegister}
+            />
+          }
+        />
 
-            <section className="card">
-              <h2>Add Transaction</h2>
-              <form onSubmit={handleSubmit} className="transaction-form">
-                <input
-                  type="number"
-                  step="0.01"
-                  name="amount"
-                  placeholder="Amount"
-                  value={formData.amount}
-                  onChange={handleChange}
-                  required
-                />
-
-                <select name="type" value={formData.type} onChange={handleChange}>
-                  <option value="Expense">Expense</option>
-                  <option value="Income">Income</option>
-                </select>
-
-                <input
-                  type="text"
-                  name="description"
-                  placeholder="Description"
-                  value={formData.description}
-                  onChange={handleChange}
-                />
-
-                <input
-                  type="datetime-local"
-                  name="date"
-                  value={formData.date}
-                  onChange={handleChange}
-                  required
-                />
-
-                <select
-                  name="categoryId"
-                  value={formData.categoryId}
-                  onChange={handleChange}
-                  required
-                >
-                  <option value="">Select Category</option>
-                  {categories
-                    .filter((category) => category.type === formData.type)
-                    .map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                </select>
-
-                <button type="submit">
-                  {editingId ? "Update" : "Submit"}
-                </button>
-                {editingId && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setEditingId(null);
-                      setFormData({
-                        amount: "",
-                        type: "Expense",
-                        description: "",
-                        date: "",
-                        categoryId: ""
-                      });
-                    }}
-                  >
-                    Cancel
-                  </button>
-                )}
-              </form>
-            </section>
-
-            <section className="split-grid">
-              <article className="card">
-                <h2>Income</h2>
-                {incomeTransactions.length === 0 ? (
-                  <p>No income transactions found.</p>
-                ) : (
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Amount</th>
-                          <th>Description</th>
-                          <th>Date</th>
-                          <th>Category</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {incomeTransactions.map((transaction) => (
-                          <tr key={transaction.id}>
-                            <td>{transaction.amount}</td>
-                            <td>{transaction.description}</td>
-                            <td>{new Date(transaction.date).toLocaleString()}</td>
-                            <td>{transaction.categoryName}</td>
-                            <td>
-                              <button onClick={() => handleDelete(transaction.id)}>Delete</button>
-                            </td>
-                            <td>
-                              <button type="button" onClick={() => handleEdit(transaction)}>
-                                Edit
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </article>
-
-              <article className="card">
-                <h2>Expense</h2>
-                {expenseTransactions.length === 0 ? (
-                  <p>No expense transactions found.</p>
-                ) : (
-                  <div className="table-wrap">
-                    <table>
-                      <thead>
-                        <tr>
-                          <th>Amount</th>
-                          <th>Description</th>
-                          <th>Date</th>
-                          <th>Category</th>
-                          <th>Actions</th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {expenseTransactions.map((transaction) => (
-                          <tr key={transaction.id}>
-                            <td>{transaction.amount}</td>
-                            <td>{transaction.description}</td>
-                            <td>{new Date(transaction.date).toLocaleString()}</td>
-                            <td>{transaction.categoryName}</td>
-                            <td>
-                              <button onClick={() => handleDelete(transaction.id)}>Delete</button>
-                            </td>
-                            <td>
-                              <button type="button" onClick={() => handleEdit(transaction)}>
-                                Edit
-                              </button>
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                )}
-              </article>
-            </section>
-          </>
-        )}
-      </main>
+        <Route
+          path="/tracker"
+          element={
+            authToken ? (
+            <TrackerPage
+              summary={summary}
+              formData={formData}
+              categories={categories}
+              editingId={editingId}
+              incomeTransactions={incomeTransactions}
+              expenseTransactions={expenseTransactions}
+              transactionError={transactionError}
+              transactionSuccess={transactionSuccess}
+              onChange={handleChange}
+              onSubmit={handleSubmit}
+              onDelete={handleDelete}
+              onEdit={handleEdit}
+              onCancelEdit={handleCancelEdit}
+            />
+            ) : (
+              <Navigate to="/" replace />
+            )
+          }
+        />
+      </Routes>
     </div>
   );
 }

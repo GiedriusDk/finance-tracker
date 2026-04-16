@@ -14,9 +14,13 @@ public class CategoryService : ICategoryService
         _context = context;
     }
 
-    public async Task<List<CategoryDto>> GetAllAsync()
+    public async Task<List<CategoryDto>> GetAllAsync(int userId)
     {
-        var categories = await _context.Categories.ToListAsync();
+        var categories = await _context.Categories
+            .Where(c => c.UserId == null || c.UserId == userId)
+            .OrderBy(c => c.Name)
+            .ToListAsync();
+
         return categories.Select(c => new CategoryDto
         {
             Id = c.Id,
